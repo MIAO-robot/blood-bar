@@ -105,12 +105,12 @@ function createTray() {
     const contextMenu = Menu.buildFromTemplate([
       {
         label: '⚙️ 配置面板',
-        click: () => { if(mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('open-config'); }
+        click: () => openConfigWindow()
       },
       { type: 'separator' },
       {
         label: '🔗 连接直播间',
-        click: () => { if(mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('open-config', 'connection'); }
+        click: () => openConfigWindow('connection')
       },
       { type: 'separator' },
       {
@@ -141,6 +141,25 @@ function createTray() {
   } catch(e) {
     console.error('创建托盘失败:', e.message);
   }
+}
+
+// ====== 独立配置窗口 ======
+let configWindow = null;
+
+function openConfigWindow(section) {
+  // 如果已有配置窗口，直接激活
+  try { if (configWindow) { configWindow.focus(); return; } } catch(e) { configWindow = null; }
+
+  configWindow = new BrowserWindow({
+    width: 660, height: 740,
+    resizable: true, title: '血条插件配置',
+    webPreferences: { nodeIntegration: true, contextIsolation: false }
+  });
+
+  const query = { mode: 'config' };
+  if (section === 'connection') query.section = 'connection';
+  configWindow.loadFile('index.html', { query });
+  configWindow.on('closed', () => { configWindow = null; });
 }
 
 // ====== WebSocket ======

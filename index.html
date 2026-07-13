@@ -6,6 +6,13 @@
 <style>
   *{margin:0;padding:0;box-sizing:border-box;}
   body{background:transparent;overflow:hidden;font-family:'Microsoft YaHei','PingFang SC',sans-serif;user-select:none;}
+  body.config-mode{background:#111;overflow:auto;}
+
+  /* 配置窗口模式：隐藏血条 */
+  body.config-mode .blood-bar-wrapper{display:none;}
+  .config-panel{border-color:#555;}
+  body.config-mode .config-overlay{display:flex !important;position:static;background:transparent;min-height:100vh;}
+  body.config-mode .config-panel{max-height:none;border-radius:0;margin:0 auto;width:640px;}
 
   .blood-bar-wrapper{position:relative;width:100vw;height:100vh;display:flex;align-items:center;justify-content:center;}
   .blood-bar-container{position:relative;width:100%;height:100%;display:flex;align-items:center;}
@@ -191,6 +198,14 @@ let currentConfig=null, toastTimer=null;
 async function init(){
   currentConfig=await ipcRenderer.invoke('get-config');
   applyConfig();renderGiftSlots();bindInputs();bindResizeHandle();bindWindowDrag();
+  // 如果是配置窗口模式，自动弹出配置面板并设置body样式
+  const params=new URLSearchParams(window.location.search);
+  if(params.get('mode')==='config'){
+    document.body.classList.add('config-mode');
+    setTimeout(()=>{
+      openConfig(params.get('section')||'');
+    },50);
+  }
 }
 
 // 计算内条尺寸（基于窗口高度比例）
@@ -316,7 +331,11 @@ function openConfig(section){
   document.getElementById('configOverlay').classList.add('show');
   if(section==='connection')document.getElementById('sectionConnection').scrollIntoView({behavior:'smooth'});
 }
-function closeConfig(){document.getElementById('configOverlay').classList.remove('show');}
+function closeConfig(){
+  document.getElementById('configOverlay').classList.remove('show');
+  // 配置窗口模式：关闭整个窗口
+  if(window.location.search.includes('mode=config')) window.close();
+}
 document.getElementById('configOverlay').addEventListener('click',function(e){if(e.target===this)closeConfig();});
 
 function showToast(msg,type){
