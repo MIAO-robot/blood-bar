@@ -105,11 +105,29 @@ function createWindow() {
 
   mainWindow.setAlwaysOnTop(true,'screen-saver');
 
-  // ★ 关键修复：主进程拦截右键，显示自定义菜单，屏蔽Windows系统菜单
-  mainWindow.webContents.on('context-menu',(e,params)=>{
-    e.preventDefault(); // 阻止默认行为
-    mainWindow.webContents.send('open-context-menu',params.x,params.y);
-  });
+  // ★ Windows 系统级拦截右键菜单（绕过拖拽区域对 webContents 事件的影响）
+  // 在 OS 消息层面吞掉 WM_CONTEXTMENU，彻底屏蔽系统菜单，再把坐标发给渲染进程弹自定义菜单
+  if (process.platform === 'win32' && typeof mainWindow.hookWindowMessage === 'function') {
+    const WM_CONTEXTMENU = 0x007b;
+    mainWindow.hookWindowMessage(WM_CONTEXTMENU, (wParam, lParam) => {
+      let screenX = 0, screenY = 0;
+      if (lParam != null && lParam !== -1) {
+        // lParam 低16位=屏幕X，高16位=屏幕Y
+        screenX = lParam & 0xffff;
+        screenY = (lParam >>> 16) & 0xffff;
+      } else {
+        // 键盘触发（如 Shift+F10），用窗口中心
+        const [wx, wy] = mainWindow.getPosition();
+        const [ww, wh] = mainWindow.getSize();
+        screenX = wx + ww / 2;
+        screenY = wy + wh / 2;
+      }
+      const [wx, wy] = mainWindow.getPosition();
+      // 转成窗口内坐标（position:fixed 相对于视口）
+      mainWindow.webContents.send('open-context-menu', Math.round(screenX - wx), Math.round(screenY - wy));
+      return true; // 已处理，阻止系统默认菜单
+    });
+  }
 }
 
 // ====== WebSocket ======
