@@ -5,7 +5,7 @@
 <title>抖音血条插件</title>
 <style>
   *{margin:0;padding:0;box-sizing:border-box;}
-  body{background:transparent;overflow:hidden;font-family:'Microsoft YaHei','PingFang SC',sans-serif;user-select:none;-webkit-app-region:drag;}
+  body{background:transparent;overflow:hidden;font-family:'Microsoft YaHei','PingFang SC',sans-serif;user-select:none;}
 
   .blood-bar-wrapper{position:relative;width:100vw;height:100vh;display:flex;align-items:center;justify-content:center;}
   .blood-bar-container{position:relative;width:100%;height:100%;display:flex;align-items:center;}
@@ -64,7 +64,7 @@
   /* 拖拽缩放手柄 */
   .resize-handle{
     position:absolute;right:0;bottom:0;width:18px;height:18px;z-index:20;
-    cursor:se-resize;-webkit-app-region:no-drag;
+    cursor:se-resize;
     background:
       linear-gradient(135deg, transparent 50%, rgba(255,255,255,.5) 50%, rgba(255,255,255,.5) 60%, transparent 60%, transparent 70%, rgba(255,255,255,.5) 70%, rgba(255,255,255,.5) 80%, transparent 80%);
   }
@@ -74,7 +74,7 @@
   .ctx-menu{
     position:fixed;z-index:200;min-width:170px;background:#252535;
     border:1px solid #444;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.6);
-    padding:4px;display:none;-webkit-app-region:no-drag;
+    padding:4px;display:none;
   }
   .ctx-menu.show{display:block;}
   .ctx-item{padding:8px 16px;font-size:13px;color:#e0e0e0;border-radius:5px;cursor:pointer;}
@@ -84,8 +84,8 @@
 
   /* ====== 配置面板 ====== */
   .config-overlay{
-    position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,.5);
-    z-index:100;display:none;-webkit-app-region:no-drag;
+    position:fixed;top:0;left:0;width:100vw;height:100vh;    background:rgba(0,0,0,.5);
+    z-index:100;display:none;
   }
   .config-overlay.show{display:flex;align-items:center;justify-content:center;}
 
@@ -213,7 +213,7 @@ let currentConfig=null, toastTimer=null;
 
 async function init(){
   currentConfig=await ipcRenderer.invoke('get-config');
-  applyConfig();renderGiftSlots();bindInputs();bindResizeHandle();bindContextMenu();
+  applyConfig();renderGiftSlots();bindInputs();bindResizeHandle();bindContextMenu();bindWindowDrag();
 }
 
 // 计算内条尺寸（基于窗口高度比例）
@@ -397,16 +397,23 @@ function bindResizeHandle(){
 function bindContextMenu(){
   const ctxMenu=document.getElementById('ctxMenu');
 
-  // 监听主进程发来的 open-context-menu 事件（关键：这能屏蔽Windows系统菜单）
-  ipcRenderer.on('open-context-menu',(event,x,y)=>{
-    // 先隐藏可能已存在的菜单再重新定位显示
+  // 显示菜单的辅助函数
+  function showCtxMenu(x,y){
     ctxMenu.classList.remove('show');
-    // 用 requestAnimationFrame 确保 display:block 后位置正确
     requestAnimationFrame(()=>{
       ctxMenu.style.left=x+'px';
       ctxMenu.style.top=y+'px';
       ctxMenu.classList.add('show');
     });
+  }
+
+  // 监听主进程发来的 open-context-menu 事件
+  ipcRenderer.on('open-context-menu',(event,x,y)=>{ showCtxMenu(x,y); });
+
+  // DOM contextmenu 兜底（非Windows或主进程没拦截时）
+  document.getElementById('bloodBarContainer').addEventListener('contextmenu',(e)=>{
+    e.preventDefault();
+    showCtxMenu(e.clientX,e.clientY);
   });
 
   // 点击其他地方关闭菜单
@@ -425,12 +432,31 @@ function bindContextMenu(){
       }
     });
   });
+}
 
-  // 同时保留DOM contextmenu作为备用（非Windows平台或主进程没拦截时）
-  document.getElementById('bloodBarContainer').addEventListener('contextmenu',(e)=>{
-    e.preventDefault();
-    ctxMenu.style.left=e.clientX+'px';ctxMenu.style.top=e.clientY+'px';ctxMenu.classList.add('show');
+// ★ 手动拖拽窗口（替代 -webkit-app-region: drag，避免拖拽区域吞掉右键事件）
+function bindWindowDrag(){
+  const container=document.getElementById('bloodBarContainer');
+  let dragging=false,lastX=0,lastY=0;
+  container.addEventListener('mousedown',(e)=>{
+    if(e.button!==0)return;                 // 只响应左键
+    if(e.target.closest('.resize-handle'))return; // 手柄不算拖拽
+    dragging=true;lastX=e.clientX;lastY=e.clientY;
+    document.body.style.cursor='move';
+    document.addEventListener('mousemove',onMove);
+    document.addEventListener('mouseup',onUp);
   });
+  function onMove(e){
+    if(!dragging)return;
+    const dx=e.clientX-lastX, dy=e.clientY-lastY;
+    lastX=e.clientX;lastY=e.clientY;
+    ipcRenderer.send('drag-window',dx,dy);
+  }
+  function onUp(){
+    dragging=false;document.body.style.cursor='';
+    document.removeEventListener('mousemove',onMove);
+    document.removeEventListener('mouseup',onUp);
+  }
 }
 
 // ★ 窗口缩放时更新内条（从main.js的resize事件触发）

@@ -105,27 +105,31 @@ function createWindow() {
 
   mainWindow.setAlwaysOnTop(true,'screen-saver');
 
-  // ★ Windows 系统级拦截右键菜单（绕过拖拽区域对 webContents 事件的影响）
-  // 在 OS 消息层面吞掉 WM_CONTEXTMENU，彻底屏蔽系统菜单，再把坐标发给渲染进程弹自定义菜单
+  // ★ Windows 系统级拦截右键菜单
+  // 同时钩 WM_CONTEXTMENU(0x7B) 和 WM_NCRBUTTONUP(0xA5) —— 系统菜单真正由后者触发
+  // 任意一条命中即弹自定义菜单并 return true 阻止系统默认菜单；用去重避免重复
   if (process.platform === 'win32' && typeof mainWindow.hookWindowMessage === 'function') {
-    const WM_CONTEXTMENU = 0x007b;
-    mainWindow.hookWindowMessage(WM_CONTEXTMENU, (wParam, lParam) => {
-      let screenX = 0, screenY = 0;
-      if (lParam != null && lParam !== -1) {
-        // lParam 低16位=屏幕X，高16位=屏幕Y
-        screenX = lParam & 0xffff;
-        screenY = (lParam >>> 16) & 0xffff;
+    let lastCtxTime = 0;
+    const sendCtx = (lParam) => {
+      const now = Date.now();
+      if (now - lastCtxTime < 80) return; // 去重
+      lastCtxTime = now;
+      let sx = 0, sy = 0;
+      if (lParam != null && lParam >= 0) {
+        sx = lParam & 0xffff; sy = (lParam >>> 16) & 0xffff;
       } else {
-        // 键盘触发（如 Shift+F10），用窗口中心
         const [wx, wy] = mainWindow.getPosition();
         const [ww, wh] = mainWindow.getSize();
-        screenX = wx + ww / 2;
-        screenY = wy + wh / 2;
+        sx = wx + ww / 2; sy = wy + wh / 2;
       }
       const [wx, wy] = mainWindow.getPosition();
-      // 转成窗口内坐标（position:fixed 相对于视口）
-      mainWindow.webContents.send('open-context-menu', Math.round(screenX - wx), Math.round(screenY - wy));
-      return true; // 已处理，阻止系统默认菜单
+      mainWindow.webContents.send('open-context-menu', Math.round(sx - wx), Math.round(sy - wy));
+    };
+    [0x007b, 0x00a5].forEach((code) => {
+      mainWindow.hookWindowMessage(code, (wParam, lParam) => {
+        sendCtx(lParam);
+        return true; // 已处理，阻止系统菜单
+      });
     });
   }
 }
@@ -190,6 +194,14 @@ ipcMain.handle('select-image',async ()=>{
 });
 
 ipcMain.on('app-quit',()=>{stopDouyinLive();app.quit();});
+
+// 手动拖拽窗口
+ipcMain.on('drag-window',(event,dx,dy)=>{
+  if(mainWindow&&!mainWindow.isDestroyed()){
+    const [x,y]=mainWindow.getPosition();
+    mainWindow.setPosition(x+dx,y+dy);
+  }
+});
 
 ipcMain.on('resize-window',(event,w,h)=>{
   if(mainWindow&&!mainWindow.isDestroyed()){
