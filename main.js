@@ -80,8 +80,12 @@ const defaultConfig = {
   ],
   barInnerImage: defaultInnerImage,
   barOuterImage: defaultOuterImage,
-  windowWidth: 400,
-  windowHeight: 60,
+  barWidth: 400,
+  barHeight: 60,
+  outerFrameWidth: 3,
+  innerBarHeight: 40,
+  windowWidth: 420,
+  windowHeight: 80,
   windowX: null,
   windowY: null
 };
@@ -117,11 +121,14 @@ function saveConfig() {
 function createWindow() {
   const { width, height } = screen.getPrimaryDisplay().workAreaSize;
   
+  const bw = config.barWidth || 400;
+  const bh = config.barHeight || 60;
+  
   mainWindow = new BrowserWindow({
-    width: config.windowWidth || 400,
-    height: config.windowHeight || 60,
-    x: config.windowX || Math.round((width - 400) / 2),
-    y: config.windowY || Math.round((height - 60) / 2),
+    width: bw + 20,
+    height: bh + 20,
+    x: config.windowX || Math.round((width - bw) / 2),
+    y: config.windowY || Math.round((height - bh) / 2),
     frame: false,
     transparent: true,
     alwaysOnTop: true,
@@ -152,42 +159,6 @@ function createWindow() {
   });
 
   mainWindow.setAlwaysOnTop(true, 'screen-saver');
-  
-  // 右键菜单 - 打开配置
-  mainWindow.webContents.on('context-menu', (e, params) => {
-    const menu = Menu.buildFromTemplate([
-      {
-        label: '⚙️ 配置面板',
-        click: () => {
-          mainWindow.webContents.send('open-config');
-        }
-      },
-      { type: 'separator' },
-      {
-        label: '🔗 连接直播间',
-        click: () => {
-          mainWindow.webContents.send('open-config', 'connection');
-        }
-      },
-      { type: 'separator' },
-      {
-        label: '🔄 重置血条',
-        click: () => {
-          config.currentHp = config.maxHp;
-          saveConfig();
-          mainWindow.webContents.send('update-hp', config.currentHp, config.maxHp);
-        }
-      },
-      { type: 'separator' },
-      {
-        label: '❌ 退出程序',
-        click: () => {
-          app.quit();
-        }
-      }
-    ]);
-    menu.popup({ window: mainWindow });
-  });
 }
 
 // WebSocket 连接 douyinLive 服务
@@ -295,6 +266,29 @@ ipcMain.handle('save-config', (event, newConfig) => {
   }
   
   return config;
+});
+
+// 持久化部分配置（尺寸/外观等，不触发重连）
+ipcMain.handle('persist-config', (event, partial) => {
+  config = { ...config, ...partial };
+  saveConfig();
+  return config;
+});
+
+// 退出程序
+ipcMain.on('app-quit', () => {
+  stopDouyinLive();
+  app.quit();
+});
+
+// 调整窗口大小（拖拽血条或数值输入触发）
+ipcMain.on('resize-window', (event, w, h) => {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.setSize(Math.round(w + 20), Math.round(h + 20));
+    config.barWidth = w;
+    config.barHeight = h;
+    saveConfig();
+  }
 });
 
 ipcMain.handle('reset-hp', () => {

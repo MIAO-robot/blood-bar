@@ -27,8 +27,8 @@
 
   .blood-bar-container {
     position: relative;
-    width: 96%;
-    height: 70%;
+    width: 100%;
+    height: 100%;
     display: flex;
     align-items: center;
   }
@@ -36,27 +36,17 @@
   /* 外框 */
   .bar-outer {
     position: absolute;
-    top: 0; left: 0;
-    width: 100%;
-    height: 100%;
+    inset: 0;
     z-index: 3;
     pointer-events: none;
     background-size: 100% 100%;
     background-repeat: no-repeat;
     background-position: center;
-    /* 默认CSS边框样式（无自定义图片时使用） */
-    border: 3px solid #555;
-    border-radius: 6px;
-    box-shadow: 0 0 8px rgba(0,0,0,0.5), inset 0 0 4px rgba(0,0,0,0.3);
   }
 
   /* 内框（背景） */
   .bar-inner-bg {
     position: absolute;
-    top: 12%;
-    left: 3%;
-    width: 94%;
-    height: 76%;
     z-index: 1;
     background: rgba(30, 30, 30, 0.85);
     border-radius: 4px;
@@ -158,32 +148,49 @@
     transition: all 0.3s ease;
   }
 
-  .gift-toast.show {
-    opacity: 1;
-    top: -40px;
-  }
-
+  .gift-toast.show { opacity: 1; top: -40px; }
   .gift-toast.heal { color: #4eff4e; text-shadow: 0 0 10px rgba(78,255,78,0.8); }
   .gift-toast.damage { color: #ff4e4e; text-shadow: 0 0 10px rgba(255,78,78,0.8); }
 
-  /* 连接状态指示灯 */
-  .connection-dot {
+  /* 拖拽缩放手柄（右下角） */
+  .resize-handle {
     position: absolute;
-    top: 4px;
-    right: 8px;
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-    z-index: 10;
-    background: #ff4444;
-    box-shadow: 0 0 6px rgba(255,68,68,0.6);
-    transition: all 0.3s ease;
+    right: 0;
+    bottom: 0;
+    width: 18px;
+    height: 18px;
+    z-index: 20;
+    cursor: se-resize;
+    -webkit-app-region: no-drag;
+    background: 
+      linear-gradient(135deg, transparent 50%, rgba(255,255,255,0.5) 50%, rgba(255,255,255,0.5) 60%, transparent 60%, transparent 70%, rgba(255,255,255,0.5) 70%, rgba(255,255,255,0.5) 80%, transparent 80%);
   }
+  .resize-handle:hover { background-color: rgba(255,255,255,0.15); }
 
-  .connection-dot.connected {
-    background: #44ff44;
-    box-shadow: 0 0 6px rgba(68,255,68,0.6);
+  /* ====== 右键菜单（DOM 实现） ====== */
+  .ctx-menu {
+    position: fixed;
+    z-index: 200;
+    min-width: 160px;
+    background: #252535;
+    border: 1px solid #444;
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.6);
+    padding: 4px;
+    display: none;
+    -webkit-app-region: no-drag;
   }
+  .ctx-menu.show { display: block; }
+  .ctx-item {
+    padding: 8px 14px;
+    font-size: 13px;
+    color: #e0e0e0;
+    border-radius: 5px;
+    cursor: pointer;
+  }
+  .ctx-item:hover { background: #ff6b6b; color: #fff; }
+  .ctx-item.danger:hover { background: #c0392b; }
+  .ctx-sep { height: 1px; background: #3a3a4a; margin: 4px 6px; }
 
   /* ====== 配置面板 ====== */
   .config-overlay {
@@ -196,12 +203,7 @@
     display: none;
     -webkit-app-region: no-drag;
   }
-
-  .config-overlay.show {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
+  .config-overlay.show { display: flex; align-items: center; justify-content: center; }
 
   .config-panel {
     background: #1e1e2e;
@@ -224,32 +226,11 @@
     padding-bottom: 12px;
   }
 
-  .config-section {
-    margin-bottom: 16px;
-    padding: 12px;
-    background: #252535;
-    border-radius: 8px;
-  }
+  .config-section { margin-bottom: 16px; padding: 12px; background: #252535; border-radius: 8px; }
+  .config-section h3 { font-size: 15px; margin-bottom: 10px; color: #aaa; }
 
-  .config-section h3 {
-    font-size: 15px;
-    margin-bottom: 10px;
-    color: #aaa;
-  }
-
-  .config-row {
-    display: flex;
-    align-items: center;
-    margin-bottom: 8px;
-    gap: 10px;
-  }
-
-  .config-row label {
-    min-width: 70px;
-    font-size: 13px;
-    color: #bbb;
-    text-align: right;
-  }
+  .config-row { display: flex; align-items: center; margin-bottom: 8px; gap: 10px; }
+  .config-row label { min-width: 80px; font-size: 13px; color: #bbb; text-align: right; }
 
   .config-row input[type="text"],
   .config-row input[type="number"] {
@@ -262,16 +243,9 @@
     font-size: 13px;
     outline: none;
   }
+  .config-row input:focus { border-color: #ff6b6b; }
 
-  .config-row input:focus {
-    border-color: #ff6b6b;
-  }
-
-  .gift-slots {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 10px;
-  }
+  .gift-slots { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 
   .gift-slot {
     background: #1a1a2a;
@@ -283,123 +257,53 @@
     gap: 6px;
     font-size: 12px;
   }
-
   .gift-slot.heal-slot { border-left: 3px solid #4eff4e; }
   .gift-slot.damage-slot { border-left: 3px solid #ff4e4e; }
-
-  .gift-slot .slot-label {
-    min-width: 28px;
-    font-size: 11px;
-    color: #888;
-  }
-
+  .gift-slot .slot-label { min-width: 28px; font-size: 11px; color: #888; }
   .gift-slot input {
-    width: 80px;
-    padding: 4px 6px;
-    border: 1px solid #333;
-    border-radius: 3px;
-    background: #111122;
-    color: #e0e0e0;
-    font-size: 12px;
-    outline: none;
+    width: 80px; padding: 4px 6px; border: 1px solid #333; border-radius: 3px;
+    background: #111122; color: #e0e0e0; font-size: 12px; outline: none;
   }
-
   .gift-slot input:focus { border-color: #ff6b6b; }
-
   .gift-slot input.gift-id-input { width: 100px; }
   .gift-slot input.gift-name-input { width: 70px; }
   .gift-slot input.hp-input { width: 55px; }
 
   .image-preview {
-    width: 100%;
-    height: 40px;
-    border: 1px dashed #444;
-    border-radius: 4px;
-    background: #1a1a2a;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    color: #666;
-    font-size: 12px;
-    background-size: contain;
-    background-repeat: no-repeat;
-    background-position: center;
-    margin-top: 6px;
-    overflow: hidden;
+    width: 100%; height: 40px; border: 1px dashed #444; border-radius: 4px;
+    background: #1a1a2a; display: flex; align-items: center; justify-content: center;
+    cursor: pointer; color: #666; font-size: 12px; background-size: contain;
+    background-repeat: no-repeat; background-position: center; margin-top: 6px; overflow: hidden;
   }
-
   .image-preview:hover { border-color: #ff6b6b; color: #ff6b6b; }
   .image-preview.has-image { border-style: solid; border-color: #4eff4e; color: transparent; }
 
-  .btn-row {
-    display: flex;
-    gap: 10px;
-    margin-top: 16px;
-    justify-content: center;
-  }
-
-  .btn {
-    padding: 8px 24px;
-    border: none;
-    border-radius: 6px;
-    font-size: 14px;
-    cursor: pointer;
-    transition: all 0.2s;
-  }
-
-  .btn-primary {
-    background: #ff6b6b;
-    color: #fff;
-  }
+  .btn-row { display: flex; gap: 10px; margin-top: 16px; justify-content: center; }
+  .btn { padding: 8px 24px; border: none; border-radius: 6px; font-size: 14px; cursor: pointer; transition: all 0.2s; }
+  .btn-primary { background: #ff6b6b; color: #fff; }
   .btn-primary:hover { background: #ff5252; }
-
-  .btn-secondary {
-    background: #333;
-    color: #ccc;
-  }
+  .btn-secondary { background: #333; color: #ccc; }
   .btn-secondary:hover { background: #444; }
 
-  .btn-danger {
-    background: #c0392b;
-    color: #fff;
-  }
-  .btn-danger:hover { background: #e74c3c; }
-
-  .status-text {
-    font-size: 12px;
-    color: #666;
-    text-align: center;
-    margin-top: 8px;
-  }
-
+  .status-text { font-size: 12px; color: #666; text-align: center; margin-top: 8px; }
   .status-text.connected { color: #4eff4e; }
   .status-text.disconnected { color: #ff4e4e; }
 
-  /* 滚动条 */
   .config-panel::-webkit-scrollbar { width: 6px; }
   .config-panel::-webkit-scrollbar-track { background: transparent; }
   .config-panel::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
 
-  /* 提示信息 */
-  .help-text {
-    font-size: 11px;
-    color: #666;
-    margin-top: 4px;
-  }
-
-  .help-text a {
-    color: #ff6b6b;
-  }
+  .help-text { font-size: 11px; color: #666; margin-top: 4px; }
+  .help-text a { color: #ff6b6b; }
+  .hint { font-size: 11px; color: #888; margin-top: 4px; }
 </style>
 </head>
 <body>
 
 <!-- 血条 UI -->
 <div class="blood-bar-wrapper">
-  <div class="connection-dot" id="connectionDot" title="连接状态"></div>
   <div class="blood-bar-container" id="bloodBarContainer">
-    <div class="bar-inner-bg">
+    <div class="bar-inner-bg" id="barInnerBg">
       <div class="bar-fill" id="barFill" style="width: 100%;">
         <div class="bar-fill-gradient"></div>
       </div>
@@ -407,7 +311,19 @@
     <div class="bar-outer" id="barOuter"></div>
     <div class="hp-text" id="hpText">100 / 100</div>
     <div class="gift-toast" id="giftToast"></div>
+    <div class="resize-handle" id="resizeHandle" title="拖拽调整血条大小"></div>
   </div>
+</div>
+
+<!-- 右键菜单 -->
+<div class="ctx-menu" id="ctxMenu">
+  <div class="ctx-item" data-action="config">⚙️ 配置面板</div>
+  <div class="ctx-sep"></div>
+  <div class="ctx-item" data-action="connect">🔗 连接直播间</div>
+  <div class="ctx-sep"></div>
+  <div class="ctx-item" data-action="reset">🔄 重置血条</div>
+  <div class="ctx-sep"></div>
+  <div class="ctx-item danger" data-action="quit">❌ 退出程序</div>
 </div>
 
 <!-- 配置面板 -->
@@ -431,7 +347,7 @@
         <input type="number" id="wsPortInput" value="1088" min="1" max="65535">
       </div>
       <div class="status-text disconnected" id="connectionStatus">未连接</div>
-      <div class="help-text">需要先运行 <code>douyinLive</code> 服务。房间号即抖音直播URL中的数字ID。</div>
+      <div class="help-text">需要先运行 douyinLive 服务（程序已内置并自动启动）。房间号即抖音直播URL中的数字ID。</div>
     </div>
 
     <!-- 血量设置 -->
@@ -448,6 +364,32 @@
       <button class="btn btn-secondary" onclick="resetHp()" style="margin-top:8px;">🔄 重置血量至上限</button>
     </div>
 
+    <!-- 尺寸设置 -->
+    <div class="config-section">
+      <h3>📐 尺寸设置</h3>
+      <div class="hint">提示：也可直接用鼠标拖拽血条右下角来调整长宽。</div>
+      <div class="config-row" style="margin-top:8px;">
+        <label>血条长度</label>
+        <input type="number" id="barWidthInput" value="400" min="120" max="3000">
+        <span style="color:#888;font-size:12px;">px</span>
+      </div>
+      <div class="config-row">
+        <label>血条高度</label>
+        <input type="number" id="barHeightInput" value="60" min="30" max="1000">
+        <span style="color:#888;font-size:12px;">px</span>
+      </div>
+      <div class="config-row">
+        <label>外框宽度</label>
+        <input type="number" id="outerFrameWidthInput" value="3" min="0" max="50">
+        <span style="color:#888;font-size:12px;">px</span>
+      </div>
+      <div class="config-row">
+        <label>内条宽度</label>
+        <input type="number" id="innerBarHeightInput" value="40" min="5" max="500">
+        <span style="color:#888;font-size:12px;">px</span>
+      </div>
+    </div>
+
     <!-- 礼物设置 -->
     <div class="config-section">
       <h3>🎁 礼物配置（8个槽位）</h3>
@@ -455,28 +397,18 @@
         请在 douyinLive 收到礼物后，从控制台查看礼物的ID和名称，然后填入下方。
         正数=加血，负数=减血（自动计算）。
       </div>
-      <div class="gift-slots" id="giftSlots">
-        <!-- 动态生成 -->
-      </div>
+      <div class="gift-slots" id="giftSlots"></div>
     </div>
 
     <!-- 外观设置 -->
     <div class="config-section">
       <h3>🎨 血条外观</h3>
-      <div class="config-row">
-        <label>内框图片</label>
-      </div>
-      <div class="image-preview" id="innerImagePreview" onclick="selectImage('inner')" title="点击选择内框图片">
-        点击选择内框背景图片
-      </div>
+      <div class="config-row"><label>内框图片</label></div>
+      <div class="image-preview" id="innerImagePreview" onclick="selectImage('inner')" title="点击选择内框图片">点击选择内框背景图片</div>
       <button class="btn btn-secondary" onclick="clearImage('inner')" style="margin-top:4px;font-size:11px;padding:4px 12px;">清除自定义内框</button>
 
-      <div class="config-row" style="margin-top:12px;">
-        <label>外框图片</label>
-      </div>
-      <div class="image-preview" id="outerImagePreview" onclick="selectImage('outer')" title="点击选择外框图片">
-        点击选择外框覆盖图片
-      </div>
+      <div class="config-row" style="margin-top:12px;"><label>外框图片</label></div>
+      <div class="image-preview" id="outerImagePreview" onclick="selectImage('outer')" title="点击选择外框图片">点击选择外框覆盖图片</div>
       <button class="btn btn-secondary" onclick="clearImage('outer')" style="margin-top:4px;font-size:11px;padding:4px 12px;">清除自定义外框</button>
     </div>
 
@@ -494,7 +426,6 @@
 <script>
   const { ipcRenderer } = require('electron');
 
-  // 当前配置
   let currentConfig = null;
   let toastTimer = null;
 
@@ -503,57 +434,60 @@
     currentConfig = await ipcRenderer.invoke('get-config');
     applyConfig();
     renderGiftSlots();
+    bindSizeInputs();
+    bindResizeHandle();
+    bindContextMenu();
   }
 
+  // 应用配置到 UI
   function applyConfig() {
-    // 应用血量
     updateHpDisplay(currentConfig.currentHp, currentConfig.maxHp);
     document.getElementById('maxHpInput').value = currentConfig.maxHp;
     document.getElementById('currentHpInput').value = currentConfig.currentHp;
     document.getElementById('cookieInput').value = currentConfig.cookie || '';
     document.getElementById('roomIdInput').value = currentConfig.roomId || '';
     document.getElementById('wsPortInput').value = currentConfig.wsPort || 1088;
+    document.getElementById('barWidthInput').value = currentConfig.barWidth || 400;
+    document.getElementById('barHeightInput').value = currentConfig.barHeight || 60;
+    document.getElementById('outerFrameWidthInput').value = currentConfig.outerFrameWidth || 3;
+    document.getElementById('innerBarHeightInput').value = currentConfig.innerBarHeight || 40;
 
-    // 应用外观
     updateImagePreview('inner', currentConfig.barInnerImage);
     updateImagePreview('outer', currentConfig.barOuterImage);
+    applyFrameStyles();
+  }
 
-    // 应用内框背景
-    const barInnerBg = document.querySelector('.bar-inner-bg');
-    if (currentConfig.barInnerImage) {
-      barInnerBg.style.backgroundImage = `url(${currentConfig.barInnerImage})`;
-      barInnerBg.style.backgroundSize = '100% 100%';
-      barInnerBg.style.backgroundRepeat = 'no-repeat';
-      barInnerBg.style.backgroundPosition = 'center';
-      barInnerBg.style.background = '';
-      document.querySelector('.bar-fill').style.opacity = '0.75';
+  // 应用外框/内框样式
+  function applyFrameStyles() {
+    const outer = document.getElementById('barOuter');
+    const ow = parseInt(currentConfig.outerFrameWidth) || 0;
+    const ih = parseInt(currentConfig.innerBarHeight) || 40;
+    const gap = ow + 5;
+
+    if (currentConfig.barOuterImage) {
+      outer.style.cssText = `position:absolute;inset:0;z-index:3;pointer-events:none;background-size:100% 100%;background-repeat:no-repeat;background-position:center;background-image:url(${currentConfig.barOuterImage});`;
     } else {
-      barInnerBg.style.backgroundImage = '';
-      barInnerBg.style.background = 'rgba(30,30,30,0.85)';
-      document.querySelector('.bar-fill').style.opacity = '1';
+      outer.style.cssText = `position:absolute;inset:0;z-index:3;pointer-events:none;border:${ow}px solid #555;border-radius:${Math.max(2, ow - 1)}px;box-shadow:0 0 8px rgba(0,0,0,.5),inset 0 0 4px rgba(0,0,0,.3);background:transparent;`;
     }
 
-    // 应用外框
-    const barOuter = document.getElementById('barOuter');
-    if (currentConfig.barOuterImage) {
-      barOuter.style.backgroundImage = `url(${currentConfig.barOuterImage})`;
-      barOuter.style.backgroundSize = '100% 100%';
-      barOuter.style.backgroundRepeat = 'no-repeat';
-      barOuter.style.backgroundPosition = 'center';
-      barOuter.style.border = 'none';
-      barOuter.style.borderRadius = '0';
-      barOuter.style.boxShadow = 'none';
-      barOuter.style.background = '';
+    const inner = document.getElementById('barInnerBg');
+    inner.style.left = gap + 'px';
+    inner.style.right = gap + 'px';
+    inner.style.top = '50%';
+    inner.style.transform = 'translateY(-50%)';
+    inner.style.height = ih + 'px';
+
+    if (currentConfig.barInnerImage) {
+      inner.style.backgroundImage = `url(${currentConfig.barInnerImage})`;
+      inner.style.backgroundSize = '100% 100%';
+      inner.style.backgroundRepeat = 'no-repeat';
+      inner.style.backgroundPosition = 'center';
+      inner.style.background = '';
+      document.getElementById('barFill').style.opacity = '0.75';
     } else {
-      barOuter.style.backgroundImage = '';
-      barOuter.style.cssText = `
-        position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-        z-index: 3; pointer-events: none;
-        border: 3px solid #555;
-        border-radius: 6px;
-        box-shadow: 0 0 8px rgba(0,0,0,0.5), inset 0 0 4px rgba(0,0,0,0.3);
-        background: transparent;
-      `;
+      inner.style.backgroundImage = '';
+      inner.style.background = 'rgba(30,30,30,0.85)';
+      document.getElementById('barFill').style.opacity = '1';
     }
   }
 
@@ -561,8 +495,6 @@
     const percent = Math.max(0, Math.min(100, (hp / maxHp) * 100));
     document.getElementById('barFill').style.width = percent + '%';
     document.getElementById('hpText').textContent = `${Math.round(hp)} / ${maxHp}`;
-    
-    // 低血量警告
     if (percent <= 25) {
       document.getElementById('barFill').classList.add('low-hp');
     } else {
@@ -587,14 +519,11 @@
   function renderGiftSlots() {
     const container = document.getElementById('giftSlots');
     container.innerHTML = '';
-
     const labels = ['加血1', '加血2', '加血3', '加血4', '减血1', '减血2', '减血3', '减血4'];
-    
     currentConfig.gifts.forEach((gift, idx) => {
       const isHeal = gift.type === 'heal';
       const slotClass = isHeal ? 'heal-slot' : 'damage-slot';
       const hpValue = isHeal ? Math.abs(gift.hpChange) : -Math.abs(gift.hpChange);
-      
       const div = document.createElement('div');
       div.className = `gift-slot ${slotClass}`;
       div.innerHTML = `
@@ -605,8 +534,6 @@
       `;
       container.appendChild(div);
     });
-
-    // 绑定事件
     container.querySelectorAll('input').forEach(input => {
       input.addEventListener('change', () => {
         const idx = parseInt(input.dataset.idx);
@@ -626,23 +553,17 @@
   async function selectImage(type) {
     const dataUrl = await ipcRenderer.invoke('select-image');
     if (dataUrl) {
-      if (type === 'inner') {
-        currentConfig.barInnerImage = dataUrl;
-      } else {
-        currentConfig.barOuterImage = dataUrl;
-      }
+      if (type === 'inner') currentConfig.barInnerImage = dataUrl;
+      else currentConfig.barOuterImage = dataUrl;
       updateImagePreview(type, dataUrl);
     }
   }
 
   function clearImage(type) {
-    if (type === 'inner') {
-      currentConfig.barInnerImage = '';
-    } else {
-      currentConfig.barOuterImage = '';
-    }
+    if (type === 'inner') currentConfig.barInnerImage = '';
+    else currentConfig.barOuterImage = '';
     updateImagePreview(type, '');
-    applyConfig();
+    applyFrameStyles();
   }
 
   // 重置血量
@@ -654,22 +575,22 @@
 
   // 保存配置
   async function saveAllConfig() {
-    // 从表单读取配置
     currentConfig.cookie = document.getElementById('cookieInput').value;
     currentConfig.roomId = document.getElementById('roomIdInput').value;
     currentConfig.wsPort = parseInt(document.getElementById('wsPortInput').value) || 1088;
     currentConfig.maxHp = parseInt(document.getElementById('maxHpInput').value) || 100;
     currentConfig.currentHp = parseInt(document.getElementById('currentHpInput').value) || 100;
-    
-    // 确保血量不超上限
+    currentConfig.barWidth = parseInt(document.getElementById('barWidthInput').value) || 400;
+    currentConfig.barHeight = parseInt(document.getElementById('barHeightInput').value) || 60;
+    currentConfig.outerFrameWidth = parseInt(document.getElementById('outerFrameWidthInput').value) || 3;
+    currentConfig.innerBarHeight = parseInt(document.getElementById('innerBarHeightInput').value) || 40;
     currentConfig.currentHp = Math.min(currentConfig.currentHp, currentConfig.maxHp);
     currentConfig.currentHp = Math.max(0, currentConfig.currentHp);
 
     currentConfig = await ipcRenderer.invoke('save-config', currentConfig);
     applyConfig();
     renderGiftSlots();
-    
-    // 短暂提示
+    ipcRenderer.send('resize-window', currentConfig.barWidth, currentConfig.barHeight);
     showToast('配置已保存!', 'heal');
     setTimeout(() => closeConfig(), 800);
   }
@@ -680,19 +601,21 @@
     if (section === 'connection') {
       document.getElementById('sectionConnection').scrollIntoView({ behavior: 'smooth' });
     }
-    // 刷新显示
     document.getElementById('cookieInput').value = currentConfig.cookie || '';
     document.getElementById('roomIdInput').value = currentConfig.roomId || '';
     document.getElementById('wsPortInput').value = currentConfig.wsPort || 1088;
     document.getElementById('maxHpInput').value = currentConfig.maxHp;
     document.getElementById('currentHpInput').value = currentConfig.currentHp;
+    document.getElementById('barWidthInput').value = currentConfig.barWidth || 400;
+    document.getElementById('barHeightInput').value = currentConfig.barHeight || 60;
+    document.getElementById('outerFrameWidthInput').value = currentConfig.outerFrameWidth || 3;
+    document.getElementById('innerBarHeightInput').value = currentConfig.innerBarHeight || 40;
   }
 
   function closeConfig() {
     document.getElementById('configOverlay').classList.remove('show');
   }
 
-  // 点击遮罩关闭
   document.getElementById('configOverlay').addEventListener('click', function(e) {
     if (e.target === this) closeConfig();
   });
@@ -703,47 +626,129 @@
     toast.textContent = msg;
     toast.className = 'gift-toast ' + type + ' show';
     if (toastTimer) clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => {
-      toast.classList.remove('show');
-    }, 2500);
+    toastTimer = setTimeout(() => toast.classList.remove('show'), 2500);
+  }
+
+  // 持久化部分配置（不触发重连）
+  function persistConfig() {
+    ipcRenderer.invoke('persist-config', {
+      barWidth: currentConfig.barWidth,
+      barHeight: currentConfig.barHeight,
+      outerFrameWidth: currentConfig.outerFrameWidth,
+      innerBarHeight: currentConfig.innerBarHeight
+    });
+  }
+
+  // 绑定尺寸输入
+  function bindSizeInputs() {
+    const bw = document.getElementById('barWidthInput');
+    const bh = document.getElementById('barHeightInput');
+    const ow = document.getElementById('outerFrameWidthInput');
+    const ih = document.getElementById('innerBarHeightInput');
+
+    bw.addEventListener('change', () => {
+      currentConfig.barWidth = parseInt(bw.value) || 400;
+      ipcRenderer.send('resize-window', currentConfig.barWidth, currentConfig.barHeight);
+      persistConfig();
+    });
+    bh.addEventListener('change', () => {
+      currentConfig.barHeight = parseInt(bh.value) || 60;
+      ipcRenderer.send('resize-window', currentConfig.barWidth, currentConfig.barHeight);
+      persistConfig();
+    });
+    ow.addEventListener('change', () => {
+      currentConfig.outerFrameWidth = parseInt(ow.value) || 0;
+      applyFrameStyles();
+      persistConfig();
+    });
+    ih.addEventListener('change', () => {
+      currentConfig.innerBarHeight = parseInt(ih.value) || 40;
+      applyFrameStyles();
+      persistConfig();
+    });
+  }
+
+  // 拖拽缩放血条（右下角手柄）
+  function bindResizeHandle() {
+    const handle = document.getElementById('resizeHandle');
+    let dragging = false, sx = 0, sy = 0, sw = 0, sh = 0;
+    handle.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      dragging = true;
+      sx = e.clientX; sy = e.clientY;
+      sw = currentConfig.barWidth || 400;
+      sh = currentConfig.barHeight || 60;
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    });
+    function onMove(e) {
+      if (!dragging) return;
+      currentConfig.barWidth = Math.max(120, sw + (e.clientX - sx));
+      currentConfig.barHeight = Math.max(30, sh + (e.clientY - sy));
+      ipcRenderer.send('resize-window', currentConfig.barWidth, currentConfig.barHeight);
+      document.getElementById('barWidthInput').value = currentConfig.barWidth;
+      document.getElementById('barHeightInput').value = currentConfig.barHeight;
+    }
+    function onUp() {
+      if (!dragging) return;
+      dragging = false;
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      persistConfig();
+    }
+  }
+
+  // 右键菜单（DOM 实现，不受拖拽区域影响）
+  function bindContextMenu() {
+    const ctxMenu = document.getElementById('ctxMenu');
+    const container = document.getElementById('bloodBarContainer');
+    container.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      ctxMenu.style.left = e.clientX + 'px';
+      ctxMenu.style.top = e.clientY + 'px';
+      ctxMenu.classList.add('show');
+    });
+    document.addEventListener('click', () => ctxMenu.classList.remove('show'));
+    ctxMenu.addEventListener('click', (e) => e.stopPropagation());
+    ctxMenu.querySelectorAll('.ctx-item').forEach(item => {
+      item.addEventListener('click', () => {
+        ctxMenu.classList.remove('show');
+        const a = item.dataset.action;
+        if (a === 'config') openConfig();
+        else if (a === 'connect') openConfig('connection');
+        else if (a === 'reset') resetHp();
+        else if (a === 'quit') ipcRenderer.send('app-quit');
+      });
+    });
   }
 
   // ====== IPC 事件监听 ======
-  ipcRenderer.on('open-config', (event, section) => {
-    openConfig(section);
-  });
-
+  ipcRenderer.on('open-config', (event, section) => openConfig(section));
   ipcRenderer.on('update-hp', (event, hp, maxHp) => {
     currentConfig.currentHp = hp;
     currentConfig.maxHp = maxHp;
     updateHpDisplay(hp, maxHp);
   });
-
   ipcRenderer.on('gift-received', (event, data) => {
     currentConfig.currentHp = data.newHp;
     updateHpDisplay(data.newHp, data.maxHp);
-    
     const sign = data.hpChange >= 0 ? '+' : '';
     const type = data.type === 'heal' ? 'heal' : 'damage';
     const repeatText = data.repeatCount > 1 ? ` x${data.repeatCount}` : '';
     showToast(`${data.giftName}${repeatText}  ${sign}${data.hpChange} HP`, type);
   });
-
   ipcRenderer.on('connection-status', (event, connected) => {
-    const dot = document.getElementById('connectionDot');
     const status = document.getElementById('connectionStatus');
     if (connected) {
-      dot.classList.add('connected');
       status.textContent = '已连接 ✓';
       status.className = 'status-text connected';
     } else {
-      dot.classList.remove('connected');
       status.textContent = '未连接';
       status.className = 'status-text disconnected';
     }
   });
 
-  // 启动
   init();
 </script>
 
