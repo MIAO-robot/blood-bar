@@ -70,18 +70,6 @@
   }
   .resize-handle:hover{background-color:rgba(255,255,255,.15);}
 
-  /* ====== 右键菜单 ====== */
-  .ctx-menu{
-    position:fixed;z-index:200;min-width:170px;background:#252535;
-    border:1px solid #444;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.6);
-    padding:4px;display:none;
-  }
-  .ctx-menu.show{display:block;}
-  .ctx-item{padding:8px 16px;font-size:13px;color:#e0e0e0;border-radius:5px;cursor:pointer;}
-  .ctx-item:hover{background:#ff6b6b;color:#fff;}
-  .ctx-item.danger:hover{background:#c0392b;}
-  .ctx-sep{height:1px;background:#3a3a4a;margin:4px 8px;}
-
   /* ====== 配置面板 ====== */
   .config-overlay{
     position:fixed;top:0;left:0;width:100vw;height:100vh;    background:rgba(0,0,0,.5);
@@ -145,17 +133,6 @@
   </div>
 </div>
 
-<!-- 右键菜单 -->
-<div class="ctx-menu" id="ctxMenu">
-  <div class="ctx-item" data-action="config">⚙️ 配置面板</div>
-  <div class="ctx-sep"></div>
-  <div class="ctx-item" data-action="connect">🔗 连接直播间</div>
-  <div class="ctx-sep"></div>
-  <div class="ctx-item" data-action="reset">🔄 重置血条</div>
-  <div class="ctx-sep"></div>
-  <div class="ctx-item danger" data-action="quit">❌ 退出程序</div>
-</div>
-
 <!-- 配置面板 -->
 <div class="config-overlay" id="configOverlay">
   <div class="config-panel" id="configPanel">
@@ -213,7 +190,7 @@ let currentConfig=null, toastTimer=null;
 
 async function init(){
   currentConfig=await ipcRenderer.invoke('get-config');
-  applyConfig();renderGiftSlots();bindInputs();bindResizeHandle();bindContextMenu();bindWindowDrag();
+  applyConfig();renderGiftSlots();bindInputs();bindResizeHandle();bindWindowDrag();
 }
 
 // 计算内条尺寸（基于窗口高度比例）
@@ -391,47 +368,6 @@ function bindResizeHandle(){
     document.removeEventListener('mousemove',onMove);document.removeEventListener('mouseup',onUp);
     ipcRenderer.invoke('persist-config',{barWidth:currentConfig.barWidth,barHeight:currentConfig.barHeight});
   }
-}
-
-// ★ 右键菜单 — 接收主进程发来的坐标事件
-function bindContextMenu(){
-  const ctxMenu=document.getElementById('ctxMenu');
-
-  // 显示菜单的辅助函数
-  function showCtxMenu(x,y){
-    ctxMenu.classList.remove('show');
-    requestAnimationFrame(()=>{
-      ctxMenu.style.left=x+'px';
-      ctxMenu.style.top=y+'px';
-      ctxMenu.classList.add('show');
-    });
-  }
-
-  // 监听主进程发来的 open-context-menu 事件
-  ipcRenderer.on('open-context-menu',(event,x,y)=>{ showCtxMenu(x,y); });
-
-  // DOM contextmenu 兜底（非Windows或主进程没拦截时）
-  document.getElementById('bloodBarContainer').addEventListener('contextmenu',(e)=>{
-    e.preventDefault();
-    showCtxMenu(e.clientX,e.clientY);
-  });
-
-  // 点击其他地方关闭菜单
-  document.addEventListener('click',()=>ctxMenu.classList.remove('show'));
-  ctxMenu.addEventListener('click',(e)=>e.stopPropagation());
-
-  // 菜单项动作
-  ctxMenu.querySelectorAll('.ctx-item').forEach(item=>{
-    item.addEventListener('click',()=>{
-      ctxMenu.classList.remove('show');
-      switch(item.dataset.action){
-        case 'config':openConfig();break;
-        case 'connect':openConfig('connection');break;
-        case 'reset':resetHp();break;
-        case 'quit':ipcRenderer.send('app-quit');break;
-      }
-    });
-  });
 }
 
 // ★ 手动拖拽窗口（替代 -webkit-app-region: drag，避免拖拽区域吞掉右键事件）

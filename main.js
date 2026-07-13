@@ -66,7 +66,62 @@ const defaultConfig = {
   windowWidth:420, windowHeight:80, windowX:null, windowY:null
 };
 
-let mainWindow=null, wsClient=null, config=null;
+let mainWindow=null, wsClient=null, config=null, ctxMenuWin=null;
+
+// ====== 独立右键菜单窗口 ======
+function ctxMenuHTML(){
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+    body{margin:0;font-family:'Microsoft YaHei',sans-serif;background:transparent;overflow:hidden;user-select:none;}
+    .menu{background:#252535;border:1px solid #444;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.6);padding:4px;min-width:170px;}
+    .item{padding:8px 16px;font-size:13px;color:#e0e0e0;border-radius:5px;cursor:pointer;}
+    .item:hover{background:#ff6b6b;color:#fff;}
+    .item.danger:hover{background:#c0392b;}
+    .sep{height:1px;background:#3a3a4a;margin:4px 8px;}
+  </style></head><body>
+  <div class="menu">
+    <div class="item" onclick="act('config')">⚙️ 配置面板</div>
+    <div class="sep"></div>
+    <div class="item" onclick="act('connect')">🔗 连接直播间</div>
+    <div class="sep"></div>
+    <div class="item" onclick="act('reset')">🔄 重置血条</div>
+    <div class="sep"></div>
+    <div class="item danger" onclick="act('quit')">❌ 退出程序</div>
+  </div>
+  <script>const {ipcRenderer}=require('electron');function act(a){ipcRenderer.send('ctx-action',a);}document.addEventListener('contextmenu',e=>e.preventDefault());<\/script>
+  </body></html>`;
+}
+
+function showContextMenu(screenX, screenY){
+  try{ if(ctxMenuWin){ctxMenuWin.close();} }catch(e){}
+  ctxMenuWin=new BrowserWindow({
+    x:Math.round(screenX), y:Math.round(screenY),
+    width:180, height:188,
+    frame:false, transparent:true, alwaysOnTop:true, skipTaskbar:true, resizable:false,
+    hasShadow:false,
+    webPreferences:{ nodeIntegration:true, contextIsolation:false }
+  });
+  ctxMenuWin.loadURL('data:text/html,'+encodeURIComponent(ctxMenuHTML()));
+  ctxMenuWin.on('blur',()=>{ try{ctxMenuWin.close();}catch(e){} ctxMenuWin=null; });
+  ctxMenuWin.webContents.on('ipc-message',(event,channel)=>{
+    if(channel==='ctx-action'){
+      const action=event.args[0];
+      try{ctxMenuWin.close();}catch(e){} ctxMenuWin=null;
+      handleCtxAction(action);
+    }
+  });
+}
+
+function handleCtxAction(action){
+  switch(action){
+    case 'config': mainWindow.webContents.send('open-config'); break;
+    case 'connect': mainWindow.webContents.send('open-config','connection'); break;
+    case 'reset':
+      config.currentHp=config.maxHp; saveConfig();
+      mainWindow.webContents.send('update-hp',config.currentHp,config.maxHp);
+      break;
+    case 'quit': stopDouyinLive(); app.quit(); break;
+  }
+}
 
 function loadConfig() {
   try {
@@ -122,8 +177,8 @@ function createWindow() {
         const [ww, wh] = mainWindow.getSize();
         sx = wx + ww / 2; sy = wy + wh / 2;
       }
-      const [wx, wy] = mainWindow.getPosition();
-      mainWindow.webContents.send('open-context-menu', Math.round(sx - wx), Math.round(sy - wy));
+      // 用屏幕坐标弹出独立菜单窗口（避免被主窗口裁剪）
+      showContextMenu(sx, sy);
     };
     [0x007b, 0x00a5].forEach((code) => {
       mainWindow.hookWindowMessage(code, (wParam, lParam) => {
