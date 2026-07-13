@@ -1,0 +1,751 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>抖音血条插件</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: transparent;
+    overflow: hidden;
+    font-family: 'Microsoft YaHei', 'PingFang SC', sans-serif;
+    user-select: none;
+    -webkit-app-region: drag;
+  }
+
+  /* ====== 血条容器 ====== */
+  .blood-bar-wrapper {
+    position: relative;
+    width: 100vw;
+    height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .blood-bar-container {
+    position: relative;
+    width: 96%;
+    height: 70%;
+    display: flex;
+    align-items: center;
+  }
+
+  /* 外框 */
+  .bar-outer {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 3;
+    pointer-events: none;
+    background-size: 100% 100%;
+    background-repeat: no-repeat;
+    background-position: center;
+    /* 默认CSS边框样式（无自定义图片时使用） */
+    border: 3px solid #555;
+    border-radius: 6px;
+    box-shadow: 0 0 8px rgba(0,0,0,0.5), inset 0 0 4px rgba(0,0,0,0.3);
+  }
+
+  /* 内框（背景） */
+  .bar-inner-bg {
+    position: absolute;
+    top: 12%;
+    left: 3%;
+    width: 94%;
+    height: 76%;
+    z-index: 1;
+    background: rgba(30, 30, 30, 0.85);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+
+  /* 血量填充 */
+  .bar-fill {
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 100%;
+    z-index: 2;
+    transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+    border-radius: 4px;
+  }
+
+  .bar-fill-gradient {
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(180deg, 
+      #ff4444 0%, 
+      #e83030 25%, 
+      #cc2222 50%, 
+      #991111 75%, 
+      #770000 100%
+    );
+    border-radius: 4px;
+    box-shadow: inset 0 2px 4px rgba(255,255,255,0.2), inset 0 -2px 4px rgba(0,0,0,0.3);
+    position: relative;
+    overflow: hidden;
+  }
+
+  /* 血量光泽动画 */
+  .bar-fill-gradient::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 60%;
+    height: 100%;
+    background: linear-gradient(90deg, 
+      transparent 0%, 
+      rgba(255,255,255,0.15) 50%, 
+      transparent 100%
+    );
+    animation: shimmer 2s infinite;
+  }
+
+  @keyframes shimmer {
+    0% { left: -60%; }
+    100% { left: 120%; }
+  }
+
+  /* 低血量警告 */
+  .bar-fill.low-hp .bar-fill-gradient {
+    animation: lowHpPulse 0.5s infinite alternate;
+    background: linear-gradient(180deg, #ff2222, #990000, #550000);
+  }
+
+  @keyframes lowHpPulse {
+    0% { opacity: 0.7; }
+    100% { opacity: 1; }
+  }
+
+  /* HP 文字 */
+  .hp-text {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 4;
+    color: #fff;
+    font-size: 18px;
+    font-weight: bold;
+    text-shadow: 
+      0 0 8px rgba(0,0,0,0.8),
+      0 0 16px rgba(0,0,0,0.6),
+      1px 1px 2px rgba(0,0,0,0.9);
+    pointer-events: none;
+    white-space: nowrap;
+    letter-spacing: 1px;
+  }
+
+  /* 礼物动画提示 */
+  .gift-toast {
+    position: absolute;
+    top: -30px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 10;
+    color: #fff;
+    font-size: 14px;
+    font-weight: bold;
+    text-shadow: 0 0 10px rgba(255,255,0,0.8), 1px 1px 3px rgba(0,0,0,0.9);
+    opacity: 0;
+    pointer-events: none;
+    white-space: nowrap;
+    transition: all 0.3s ease;
+  }
+
+  .gift-toast.show {
+    opacity: 1;
+    top: -40px;
+  }
+
+  .gift-toast.heal { color: #4eff4e; text-shadow: 0 0 10px rgba(78,255,78,0.8); }
+  .gift-toast.damage { color: #ff4e4e; text-shadow: 0 0 10px rgba(255,78,78,0.8); }
+
+  /* 连接状态指示灯 */
+  .connection-dot {
+    position: absolute;
+    top: 4px;
+    right: 8px;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    z-index: 10;
+    background: #ff4444;
+    box-shadow: 0 0 6px rgba(255,68,68,0.6);
+    transition: all 0.3s ease;
+  }
+
+  .connection-dot.connected {
+    background: #44ff44;
+    box-shadow: 0 0 6px rgba(68,255,68,0.6);
+  }
+
+  /* ====== 配置面板 ====== */
+  .config-overlay {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0,0,0,0.5);
+    z-index: 100;
+    display: none;
+    -webkit-app-region: no-drag;
+  }
+
+  .config-overlay.show {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .config-panel {
+    background: #1e1e2e;
+    border: 2px solid #444;
+    border-radius: 12px;
+    width: 620px;
+    max-height: 85vh;
+    overflow-y: auto;
+    color: #e0e0e0;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+    padding: 24px;
+  }
+
+  .config-panel h2 {
+    font-size: 20px;
+    margin-bottom: 16px;
+    color: #ff6b6b;
+    text-align: center;
+    border-bottom: 1px solid #333;
+    padding-bottom: 12px;
+  }
+
+  .config-section {
+    margin-bottom: 16px;
+    padding: 12px;
+    background: #252535;
+    border-radius: 8px;
+  }
+
+  .config-section h3 {
+    font-size: 15px;
+    margin-bottom: 10px;
+    color: #aaa;
+  }
+
+  .config-row {
+    display: flex;
+    align-items: center;
+    margin-bottom: 8px;
+    gap: 10px;
+  }
+
+  .config-row label {
+    min-width: 70px;
+    font-size: 13px;
+    color: #bbb;
+    text-align: right;
+  }
+
+  .config-row input[type="text"],
+  .config-row input[type="number"] {
+    flex: 1;
+    padding: 6px 10px;
+    border: 1px solid #444;
+    border-radius: 4px;
+    background: #1a1a2a;
+    color: #e0e0e0;
+    font-size: 13px;
+    outline: none;
+  }
+
+  .config-row input:focus {
+    border-color: #ff6b6b;
+  }
+
+  .gift-slots {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  .gift-slot {
+    background: #1a1a2a;
+    border: 1px solid #333;
+    border-radius: 6px;
+    padding: 8px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+  }
+
+  .gift-slot.heal-slot { border-left: 3px solid #4eff4e; }
+  .gift-slot.damage-slot { border-left: 3px solid #ff4e4e; }
+
+  .gift-slot .slot-label {
+    min-width: 28px;
+    font-size: 11px;
+    color: #888;
+  }
+
+  .gift-slot input {
+    width: 80px;
+    padding: 4px 6px;
+    border: 1px solid #333;
+    border-radius: 3px;
+    background: #111122;
+    color: #e0e0e0;
+    font-size: 12px;
+    outline: none;
+  }
+
+  .gift-slot input:focus { border-color: #ff6b6b; }
+
+  .gift-slot input.gift-id-input { width: 100px; }
+  .gift-slot input.gift-name-input { width: 70px; }
+  .gift-slot input.hp-input { width: 55px; }
+
+  .image-preview {
+    width: 100%;
+    height: 40px;
+    border: 1px dashed #444;
+    border-radius: 4px;
+    background: #1a1a2a;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: #666;
+    font-size: 12px;
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: center;
+    margin-top: 6px;
+    overflow: hidden;
+  }
+
+  .image-preview:hover { border-color: #ff6b6b; color: #ff6b6b; }
+  .image-preview.has-image { border-style: solid; border-color: #4eff4e; color: transparent; }
+
+  .btn-row {
+    display: flex;
+    gap: 10px;
+    margin-top: 16px;
+    justify-content: center;
+  }
+
+  .btn {
+    padding: 8px 24px;
+    border: none;
+    border-radius: 6px;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .btn-primary {
+    background: #ff6b6b;
+    color: #fff;
+  }
+  .btn-primary:hover { background: #ff5252; }
+
+  .btn-secondary {
+    background: #333;
+    color: #ccc;
+  }
+  .btn-secondary:hover { background: #444; }
+
+  .btn-danger {
+    background: #c0392b;
+    color: #fff;
+  }
+  .btn-danger:hover { background: #e74c3c; }
+
+  .status-text {
+    font-size: 12px;
+    color: #666;
+    text-align: center;
+    margin-top: 8px;
+  }
+
+  .status-text.connected { color: #4eff4e; }
+  .status-text.disconnected { color: #ff4e4e; }
+
+  /* 滚动条 */
+  .config-panel::-webkit-scrollbar { width: 6px; }
+  .config-panel::-webkit-scrollbar-track { background: transparent; }
+  .config-panel::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
+
+  /* 提示信息 */
+  .help-text {
+    font-size: 11px;
+    color: #666;
+    margin-top: 4px;
+  }
+
+  .help-text a {
+    color: #ff6b6b;
+  }
+</style>
+</head>
+<body>
+
+<!-- 血条 UI -->
+<div class="blood-bar-wrapper">
+  <div class="connection-dot" id="connectionDot" title="连接状态"></div>
+  <div class="blood-bar-container" id="bloodBarContainer">
+    <div class="bar-inner-bg">
+      <div class="bar-fill" id="barFill" style="width: 100%;">
+        <div class="bar-fill-gradient"></div>
+      </div>
+    </div>
+    <div class="bar-outer" id="barOuter"></div>
+    <div class="hp-text" id="hpText">100 / 100</div>
+    <div class="gift-toast" id="giftToast"></div>
+  </div>
+</div>
+
+<!-- 配置面板 -->
+<div class="config-overlay" id="configOverlay">
+  <div class="config-panel" id="configPanel">
+    <h2>⚙️ 血条插件配置</h2>
+
+    <!-- 连接设置 -->
+    <div class="config-section" id="sectionConnection">
+      <h3>🔗 连接设置</h3>
+      <div class="config-row">
+        <label>Cookie</label>
+        <input type="text" id="cookieInput" placeholder="粘贴抖音直播Cookie...">
+      </div>
+      <div class="config-row">
+        <label>房间号</label>
+        <input type="text" id="roomIdInput" placeholder="抖音直播间ID（URL中数字部分）">
+      </div>
+      <div class="config-row">
+        <label>WS端口</label>
+        <input type="number" id="wsPortInput" value="1088" min="1" max="65535">
+      </div>
+      <div class="status-text disconnected" id="connectionStatus">未连接</div>
+      <div class="help-text">需要先运行 <code>douyinLive</code> 服务。房间号即抖音直播URL中的数字ID。</div>
+    </div>
+
+    <!-- 血量设置 -->
+    <div class="config-section">
+      <h3>❤️ 血量设置</h3>
+      <div class="config-row">
+        <label>血量上限</label>
+        <input type="number" id="maxHpInput" value="100" min="1" max="99999">
+      </div>
+      <div class="config-row">
+        <label>当前血量</label>
+        <input type="number" id="currentHpInput" value="100" min="0" max="99999">
+      </div>
+      <button class="btn btn-secondary" onclick="resetHp()" style="margin-top:8px;">🔄 重置血量至上限</button>
+    </div>
+
+    <!-- 礼物设置 -->
+    <div class="config-section">
+      <h3>🎁 礼物配置（8个槽位）</h3>
+      <div class="help-text" style="margin-bottom:8px;">
+        请在 douyinLive 收到礼物后，从控制台查看礼物的ID和名称，然后填入下方。
+        正数=加血，负数=减血（自动计算）。
+      </div>
+      <div class="gift-slots" id="giftSlots">
+        <!-- 动态生成 -->
+      </div>
+    </div>
+
+    <!-- 外观设置 -->
+    <div class="config-section">
+      <h3>🎨 血条外观</h3>
+      <div class="config-row">
+        <label>内框图片</label>
+      </div>
+      <div class="image-preview" id="innerImagePreview" onclick="selectImage('inner')" title="点击选择内框图片">
+        点击选择内框背景图片
+      </div>
+      <button class="btn btn-secondary" onclick="clearImage('inner')" style="margin-top:4px;font-size:11px;padding:4px 12px;">清除自定义内框</button>
+
+      <div class="config-row" style="margin-top:12px;">
+        <label>外框图片</label>
+      </div>
+      <div class="image-preview" id="outerImagePreview" onclick="selectImage('outer')" title="点击选择外框图片">
+        点击选择外框覆盖图片
+      </div>
+      <button class="btn btn-secondary" onclick="clearImage('outer')" style="margin-top:4px;font-size:11px;padding:4px 12px;">清除自定义外框</button>
+    </div>
+
+    <!-- 按钮 -->
+    <div class="btn-row">
+      <button class="btn btn-primary" onclick="saveAllConfig()">💾 保存配置</button>
+      <button class="btn btn-secondary" onclick="closeConfig()">✖ 关闭</button>
+    </div>
+    <div class="help-text" style="margin-top:12px;">
+      💡 右键点击血条可快速打开此配置面板 | 提示：礼物ID可从 douyinLive 控制台输出的礼物消息中获得
+    </div>
+  </div>
+</div>
+
+<script>
+  const { ipcRenderer } = require('electron');
+
+  // 当前配置
+  let currentConfig = null;
+  let toastTimer = null;
+
+  // 初始化
+  async function init() {
+    currentConfig = await ipcRenderer.invoke('get-config');
+    applyConfig();
+    renderGiftSlots();
+  }
+
+  function applyConfig() {
+    // 应用血量
+    updateHpDisplay(currentConfig.currentHp, currentConfig.maxHp);
+    document.getElementById('maxHpInput').value = currentConfig.maxHp;
+    document.getElementById('currentHpInput').value = currentConfig.currentHp;
+    document.getElementById('cookieInput').value = currentConfig.cookie || '';
+    document.getElementById('roomIdInput').value = currentConfig.roomId || '';
+    document.getElementById('wsPortInput').value = currentConfig.wsPort || 1088;
+
+    // 应用外观
+    updateImagePreview('inner', currentConfig.barInnerImage);
+    updateImagePreview('outer', currentConfig.barOuterImage);
+
+    // 应用内框背景
+    const barInnerBg = document.querySelector('.bar-inner-bg');
+    if (currentConfig.barInnerImage) {
+      barInnerBg.style.backgroundImage = `url(${currentConfig.barInnerImage})`;
+      barInnerBg.style.backgroundSize = '100% 100%';
+      barInnerBg.style.backgroundRepeat = 'no-repeat';
+      barInnerBg.style.backgroundPosition = 'center';
+      barInnerBg.style.background = '';
+      document.querySelector('.bar-fill').style.opacity = '0.75';
+    } else {
+      barInnerBg.style.backgroundImage = '';
+      barInnerBg.style.background = 'rgba(30,30,30,0.85)';
+      document.querySelector('.bar-fill').style.opacity = '1';
+    }
+
+    // 应用外框
+    const barOuter = document.getElementById('barOuter');
+    if (currentConfig.barOuterImage) {
+      barOuter.style.backgroundImage = `url(${currentConfig.barOuterImage})`;
+      barOuter.style.backgroundSize = '100% 100%';
+      barOuter.style.backgroundRepeat = 'no-repeat';
+      barOuter.style.backgroundPosition = 'center';
+      barOuter.style.border = 'none';
+      barOuter.style.borderRadius = '0';
+      barOuter.style.boxShadow = 'none';
+      barOuter.style.background = '';
+    } else {
+      barOuter.style.backgroundImage = '';
+      barOuter.style.cssText = `
+        position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+        z-index: 3; pointer-events: none;
+        border: 3px solid #555;
+        border-radius: 6px;
+        box-shadow: 0 0 8px rgba(0,0,0,0.5), inset 0 0 4px rgba(0,0,0,0.3);
+        background: transparent;
+      `;
+    }
+  }
+
+  function updateHpDisplay(hp, maxHp) {
+    const percent = Math.max(0, Math.min(100, (hp / maxHp) * 100));
+    document.getElementById('barFill').style.width = percent + '%';
+    document.getElementById('hpText').textContent = `${Math.round(hp)} / ${maxHp}`;
+    
+    // 低血量警告
+    if (percent <= 25) {
+      document.getElementById('barFill').classList.add('low-hp');
+    } else {
+      document.getElementById('barFill').classList.remove('low-hp');
+    }
+  }
+
+  function updateImagePreview(type, dataUrl) {
+    const preview = document.getElementById(type === 'inner' ? 'innerImagePreview' : 'outerImagePreview');
+    if (dataUrl) {
+      preview.style.backgroundImage = `url(${dataUrl})`;
+      preview.classList.add('has-image');
+      preview.textContent = '';
+    } else {
+      preview.style.backgroundImage = '';
+      preview.classList.remove('has-image');
+      preview.textContent = type === 'inner' ? '点击选择内框背景图片' : '点击选择外框覆盖图片';
+    }
+  }
+
+  // 礼物槽位渲染
+  function renderGiftSlots() {
+    const container = document.getElementById('giftSlots');
+    container.innerHTML = '';
+
+    const labels = ['加血1', '加血2', '加血3', '加血4', '减血1', '减血2', '减血3', '减血4'];
+    
+    currentConfig.gifts.forEach((gift, idx) => {
+      const isHeal = gift.type === 'heal';
+      const slotClass = isHeal ? 'heal-slot' : 'damage-slot';
+      const hpValue = isHeal ? Math.abs(gift.hpChange) : -Math.abs(gift.hpChange);
+      
+      const div = document.createElement('div');
+      div.className = `gift-slot ${slotClass}`;
+      div.innerHTML = `
+        <span class="slot-label">${labels[idx]}</span>
+        <input type="text" class="gift-id-input" placeholder="礼物ID" value="${gift.id || ''}" data-idx="${idx}" data-field="id">
+        <input type="text" class="gift-name-input" placeholder="名称" value="${gift.name || ''}" data-idx="${idx}" data-field="name">
+        <input type="number" class="hp-input" placeholder="血量" value="${hpValue || 0}" data-idx="${idx}" data-field="hpChange" min="${isHeal ? 0 : -9999}" max="${isHeal ? 9999 : 0}">
+      `;
+      container.appendChild(div);
+    });
+
+    // 绑定事件
+    container.querySelectorAll('input').forEach(input => {
+      input.addEventListener('change', () => {
+        const idx = parseInt(input.dataset.idx);
+        const field = input.dataset.field;
+        if (field === 'hpChange') {
+          const rawValue = parseInt(input.value) || 0;
+          const isHeal = currentConfig.gifts[idx].type === 'heal';
+          currentConfig.gifts[idx].hpChange = isHeal ? Math.abs(rawValue) : -Math.abs(rawValue);
+        } else {
+          currentConfig.gifts[idx][field] = input.value;
+        }
+      });
+    });
+  }
+
+  // 选择图片
+  async function selectImage(type) {
+    const dataUrl = await ipcRenderer.invoke('select-image');
+    if (dataUrl) {
+      if (type === 'inner') {
+        currentConfig.barInnerImage = dataUrl;
+      } else {
+        currentConfig.barOuterImage = dataUrl;
+      }
+      updateImagePreview(type, dataUrl);
+    }
+  }
+
+  function clearImage(type) {
+    if (type === 'inner') {
+      currentConfig.barInnerImage = '';
+    } else {
+      currentConfig.barOuterImage = '';
+    }
+    updateImagePreview(type, '');
+    applyConfig();
+  }
+
+  // 重置血量
+  async function resetHp() {
+    currentConfig = await ipcRenderer.invoke('reset-hp');
+    updateHpDisplay(currentConfig.currentHp, currentConfig.maxHp);
+    document.getElementById('currentHpInput').value = currentConfig.currentHp;
+  }
+
+  // 保存配置
+  async function saveAllConfig() {
+    // 从表单读取配置
+    currentConfig.cookie = document.getElementById('cookieInput').value;
+    currentConfig.roomId = document.getElementById('roomIdInput').value;
+    currentConfig.wsPort = parseInt(document.getElementById('wsPortInput').value) || 1088;
+    currentConfig.maxHp = parseInt(document.getElementById('maxHpInput').value) || 100;
+    currentConfig.currentHp = parseInt(document.getElementById('currentHpInput').value) || 100;
+    
+    // 确保血量不超上限
+    currentConfig.currentHp = Math.min(currentConfig.currentHp, currentConfig.maxHp);
+    currentConfig.currentHp = Math.max(0, currentConfig.currentHp);
+
+    currentConfig = await ipcRenderer.invoke('save-config', currentConfig);
+    applyConfig();
+    renderGiftSlots();
+    
+    // 短暂提示
+    showToast('配置已保存!', 'heal');
+    setTimeout(() => closeConfig(), 800);
+  }
+
+  // 配置面板开关
+  function openConfig(section) {
+    document.getElementById('configOverlay').classList.add('show');
+    if (section === 'connection') {
+      document.getElementById('sectionConnection').scrollIntoView({ behavior: 'smooth' });
+    }
+    // 刷新显示
+    document.getElementById('cookieInput').value = currentConfig.cookie || '';
+    document.getElementById('roomIdInput').value = currentConfig.roomId || '';
+    document.getElementById('wsPortInput').value = currentConfig.wsPort || 1088;
+    document.getElementById('maxHpInput').value = currentConfig.maxHp;
+    document.getElementById('currentHpInput').value = currentConfig.currentHp;
+  }
+
+  function closeConfig() {
+    document.getElementById('configOverlay').classList.remove('show');
+  }
+
+  // 点击遮罩关闭
+  document.getElementById('configOverlay').addEventListener('click', function(e) {
+    if (e.target === this) closeConfig();
+  });
+
+  // 礼物提示
+  function showToast(msg, type) {
+    const toast = document.getElementById('giftToast');
+    toast.textContent = msg;
+    toast.className = 'gift-toast ' + type + ' show';
+    if (toastTimer) clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => {
+      toast.classList.remove('show');
+    }, 2500);
+  }
+
+  // ====== IPC 事件监听 ======
+  ipcRenderer.on('open-config', (event, section) => {
+    openConfig(section);
+  });
+
+  ipcRenderer.on('update-hp', (event, hp, maxHp) => {
+    currentConfig.currentHp = hp;
+    currentConfig.maxHp = maxHp;
+    updateHpDisplay(hp, maxHp);
+  });
+
+  ipcRenderer.on('gift-received', (event, data) => {
+    currentConfig.currentHp = data.newHp;
+    updateHpDisplay(data.newHp, data.maxHp);
+    
+    const sign = data.hpChange >= 0 ? '+' : '';
+    const type = data.type === 'heal' ? 'heal' : 'damage';
+    const repeatText = data.repeatCount > 1 ? ` x${data.repeatCount}` : '';
+    showToast(`${data.giftName}${repeatText}  ${sign}${data.hpChange} HP`, type);
+  });
+
+  ipcRenderer.on('connection-status', (event, connected) => {
+    const dot = document.getElementById('connectionDot');
+    const status = document.getElementById('connectionStatus');
+    if (connected) {
+      dot.classList.add('connected');
+      status.textContent = '已连接 ✓';
+      status.className = 'status-text connected';
+    } else {
+      dot.classList.remove('connected');
+      status.textContent = '未连接';
+      status.className = 'status-text disconnected';
+    }
+  });
+
+  // 启动
+  init();
+</script>
+
+</body>
+</html>
