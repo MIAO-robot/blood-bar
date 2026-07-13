@@ -1,7 +1,46 @@
 const { app, BrowserWindow, ipcMain, Tray, Menu, dialog, screen } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const { spawn } = require('child_process');
 const WebSocket = require('ws');
+
+// douyinLive 子进程
+let douyinLiveProcess = null;
+
+// 获取 douyinLive 可执行文件路径（开发态与打包态不同）
+function getDouyinLivePath() {
+  const base = app.isPackaged ? process.resourcesPath : __dirname;
+  const exe = process.platform === 'win32' ? 'douyinLive.exe' : 'douyinLive';
+  return path.join(base, 'bin', exe);
+}
+
+// 自动启动 douyinLive 服务
+function startDouyinLive() {
+  const exePath = getDouyinLivePath();
+  if (!fs.existsSync(exePath)) {
+    console.log('[douyinLive] 未找到程序文件:', exePath, '(将仅尝试连接已手动启动的服务)');
+    return;
+  }
+  try {
+    douyinLiveProcess = spawn(exePath, [], {
+      detached: false,
+      stdio: 'ignore'
+    });
+    douyinLiveProcess.on('error', (e) => console.error('[douyinLive] 启动失败:', e.message));
+    douyinLiveProcess.unref();
+    console.log('[douyinLive] 服务已自动启动');
+  } catch (e) {
+    console.error('[douyinLive] 启动异常:', e.message);
+  }
+}
+
+function stopDouyinLive() {
+  if (douyinLiveProcess) {
+    try { douyinLiveProcess.kill(); } catch (e) {}
+    douyinLiveProcess = null;
+    console.log('[douyinLive] 服务已停止');
+  }
+}
 
 // 配置文件路径
 const configPath = path.join(app.getPath('userData'), 'config.json');
@@ -289,19 +328,20 @@ ipcMain.handle('reconnect', () => {
 // 应用启动
 app.whenReady().then(() => {
   loadConfig();
+  startDouyinLive();   // 自动拉起 douyinLive 服务
   createWindow();
   
-  // 自动连接
-  if (config.roomId) {
-    setTimeout(() => connectToDouyinLive(), 1000);
-  }
+  // 给服务 2 秒启动时间后连接
+  setTimeout(() => connectToDouyinLive(), 2000);
 });
 
 app.on('window-all-closed', () => {
   if (wsClient) wsClient.close();
+  stopDouyinLive();
   app.quit();
 });
 
 app.on('before-quit', () => {
   if (wsClient) wsClient.close();
+  stopDouyinLive();
 });
