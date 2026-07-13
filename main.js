@@ -4,7 +4,6 @@ const fs = require('fs');
 const { spawn } = require('child_process');
 const WebSocket = require('ws');
 
-// douyinLive 子进程
 let douyinLiveProcess = null;
 
 function getDouyinLivePath() {
@@ -18,7 +17,7 @@ function startDouyinLive() {
   if (!fs.existsSync(exePath)) { console.log('[douyinLive] 未找到:', exePath); return; }
   try {
     douyinLiveProcess = spawn(exePath, [], { detached: false, stdio: 'ignore' });
-    douyinLiveProcess.on('error', (e) => console.error('[douyinLive] 启动失败:', e.message));
+    douyinLiveProcess.on('error', e => console.error('[douyinLive] 启动失败:', e.message));
     douyinLiveProcess.unref();
     console.log('[douyinLive] 服务已自动启动');
   } catch(e){ console.error('[douyinLive] 启动异常:', e.message); }
@@ -56,7 +55,7 @@ const defaultConfig = {
   windowWidth:420, windowHeight:80, windowX:null, windowY:null
 };
 
-let mainWindow=null, wsClient=null, config=null, tray=null;
+let mainWindow=null, wsClient=null, config=null, tray=null, configWindow=null;
 
 function loadConfig() {
   try {
@@ -83,8 +82,7 @@ function createWindow() {
   mainWindow.on('resize',()=>{
     const[w,h]=mainWindow.getSize();
     config.windowWidth=w; config.windowHeight=h;
-    config.barWidth=Math.max(120,w-20); config.barHeight=Math.max(30,h-20);
-    mainWindow.webContents.send('window-resized',w,h);
+    // 不改变血条尺寸——血条只由缩放手柄或配置面板控制
     saveConfig();
   });
   mainWindow.setAlwaysOnTop(true,'screen-saver');
@@ -94,68 +92,39 @@ function createWindow() {
 function createTray() {
   try {
     const iconPath = path.join(__dirname, 'assets', 'icon.png');
-    let trayIcon;
-    if (fs.existsSync(iconPath)) {
-      trayIcon = nativeImage.createFromPath(iconPath);
-      // 缩小到托盘合适尺寸（16x16 或 24x24）
-      trayIcon = trayIcon.resize({ width: 16, height: 16 });
-    }
-    tray = new Tray(trayIcon || nativeImage.createEmpty());
-
+    let trayIcon = fs.existsSync(iconPath) ? nativeImage.createFromPath(iconPath).resize({width:16,height:16}) : nativeImage.createEmpty();
+    tray = new Tray(trayIcon);
     const contextMenu = Menu.buildFromTemplate([
-      {
-        label: '⚙️ 配置面板',
-        click: () => openConfigWindow()
-      },
+      { label: '⚙️ 配置面板', click: () => openConfigWindow() },
       { type: 'separator' },
-      {
-        label: '🔗 连接直播间',
-        click: () => openConfigWindow('connection')
-      },
+      { label: '🔗 连接直播间', click: () => openConfigWindow('connection') },
       { type: 'separator' },
-      {
-        label: '🔄 重置血条',
-        click: () => {
+      { label: '🔄 重置血条', click: () => {
           config.currentHp = config.maxHp; saveConfig();
           if(mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('update-hp', config.currentHp, config.maxHp);
         }
       },
       { type: 'separator' },
-      {
-        label: '❌ 退出程序',
-        click: () => { stopDouyinLive(); app.quit(); }
-      }
+      { label: '❌ 退出程序', click: () => { stopDouyinLive(); app.quit(); } }
     ]);
-
     tray.setToolTip('抖音血条插件');
     tray.setContextMenu(contextMenu);
-
-    // 左键双击显示/隐藏窗口
     tray.on('double-click', () => {
       if (mainWindow && !mainWindow.isDestroyed()) {
         if (mainWindow.isVisible()) mainWindow.hide(); else mainWindow.show();
       }
     });
-
     console.log('系统托盘已创建');
-  } catch(e) {
-    console.error('创建托盘失败:', e.message);
-  }
+  } catch(e) { console.error('创建托盘失败:', e.message); }
 }
 
 // ====== 独立配置窗口 ======
-let configWindow = null;
-
 function openConfigWindow(section) {
-  // 如果已有配置窗口，直接激活
   try { if (configWindow) { configWindow.focus(); return; } } catch(e) { configWindow = null; }
-
   configWindow = new BrowserWindow({
-    width: 660, height: 740,
-    resizable: true, title: '血条插件配置',
+    width: 660, height: 740, resizable: true, title: '血条插件配置',
     webPreferences: { nodeIntegration: true, contextIsolation: false }
   });
-
   const query = { mode: 'config' };
   if (section === 'connection') query.section = 'connection';
   configWindow.loadFile('index.html', { query });
@@ -179,26 +148,70 @@ function connectToDouyinLive(){
   }catch(e){console.error('连接失败:',e);}
 }
 
+// 【修复4】支持按礼物名或礼物ID匹配
 function handleGiftMessage(msg){
   const giftId=String(msg.gift?.id||msg.gift?.gift_id||'');
-  const giftName=msg.gift?.name||msg.gift?.gift_name||'';
+  const giftName=(msg.gift?.name||msg.gift?.gift_name||'').trim();
   const repeatCount=msg.repeat_count||msg.gift?.repeat_count||msg.combo||1;
   const repeatEnd=msg.repeat_end||msg.gift?.repeat_end;
   if(repeatEnd!==undefined&&repeatEnd===0&&repeatCount>1)return;
-  const giftConfig=config.gifts.find(g=>g.id===giftId&&g.id!=='');
+  
+  // 按礼物ID 或 礼物名（不区分大小写）匹配
+  const giftConfig=config.gifts.find(g=>
+    (g.id!=='' && g.id===giftId) ||
+    (g.name!=='' && g.name.trim().toLowerCase()===giftName.toLowerCase())
+  );
   if(giftConfig){
     const totalChange=giftConfig.hpChange*repeatCount;
     const newHp=Math.max(0,Math.min(config.maxHp,config.currentHp+totalChange));
     config.currentHp=newHp; saveConfig();
-    mainWindow.webContents.send('gift-received',{giftName,giftId,hpChange:totalChange,newHp,maxHp:config.maxHp,type:giftConfig.type,repeatCount});
+    // 通知主窗口更新血条
+    if(mainWindow&&!mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('update-hp',config.currentHp,config.maxHp);
+      mainWindow.webContents.send('gift-received',{giftName,giftId,hpChange:totalChange,newHp,maxHp:config.maxHp,type:giftConfig.type,repeatCount});
+    }
   }
 }
 
 // ====== IPC ======
 ipcMain.handle('get-config',()=>config);
-ipcMain.handle('save-config',(event,newConfig)=>{config={...config,...newConfig};saveConfig();if(newConfig.roomId!==undefined||newConfig.wsPort!==undefined)connectToDouyinLive();return config;});
+
+// 【修复3】保存配置后立即通知主窗口更新血条
+ipcMain.handle('save-config',(event,newConfig)=>{
+  const oldHp=config.currentHp; const oldMax=config.maxHp;
+  config={...config,...newConfig};saveConfig();
+  if(newConfig.roomId!==undefined||newConfig.wsPort!==undefined)connectToDouyinLive();
+  // 血量变了就通知主窗口更新
+  if(config.currentHp!==oldHp||config.maxHp!==oldMax){
+    if(mainWindow&&!mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('update-hp',config.currentHp,config.maxHp);
+    }
+  }
+  return config;
+});
+
 ipcMain.handle('persist-config',(event,partial)=>{config={...config,...partial};saveConfig();return config;});
 ipcMain.handle('reset-hp',()=>{config.currentHp=config.maxHp;saveConfig();return config;});
+
+// 【修复3续】恢复血条默认状态（全部恢复到默认值）
+ipcMain.handle('reset-defaults',()=>{
+  config.currentHp=100;
+  config.maxHp=100;
+  config.barWidth=400; config.barHeight=60;
+  config.outerFrameWidth=3;
+  config.barInnerImage=defaultInnerImage;
+  config.barOuterImage=defaultOuterImage;
+  config.gifts=[
+    {id:'',name:'',hpChange:0,type:'heal'},{id:'',name:'',hpChange:0,type:'heal'},
+    {id:'',name:'',hpChange:0,type:'heal'},{id:'',name:'',hpChange:0,type:'heal'},
+    {id:'',name:'',hpChange:0,type:'damage'},{id:'',name:'',hpChange:0,type:'damage'},
+    {id:'',name:'',hpChange:0,type:'damage'},{id:'',name:'',hpChange:0,type:'damage'}
+  ];
+  saveConfig();
+  if(mainWindow&&!mainWindow.isDestroyed()) mainWindow.webContents.send('update-hp',config.currentHp,config.maxHp);
+  return config;
+});
+
 ipcMain.handle('select-image',async ()=>{
   const result=await dialog.showOpenDialog(mainWindow,{properties:['openFile'],filters:[{name:'图片文件',extensions:['png','jpg','jpeg','gif','bmp','webp']}]});
   if(!result.canceled&&result.filePaths.length>0){
@@ -210,7 +223,6 @@ ipcMain.handle('select-image',async ()=>{
   return null;
 });
 
-// 手动拖拽窗口
 ipcMain.on('drag-window',(event,dx,dy)=>{
   if(mainWindow&&!mainWindow.isDestroyed()){
     const[x,y]=mainWindow.getPosition();
@@ -218,7 +230,6 @@ ipcMain.on('drag-window',(event,dx,dy)=>{
   }
 });
 
-// 启动
 app.whenReady().then(()=>{loadConfig();startDouyinLive();createWindow();createTray();setTimeout(()=>connectToDouyinLive(),2000);});
 app.on('window-all-closed',()=>{if(wsClient)wsClient.close();stopDouyinLive();app.quit();});
 app.on('before-quit',()=>{if(wsClient)wsClient.close();stopDouyinLive();});
